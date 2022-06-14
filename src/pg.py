@@ -1,15 +1,23 @@
 """Módulo de conexión con la base de datos"""
 
 import psycopg2
-from psycopg2 import Error
+import psycopg2.extras
 
 
 def instance_cursor(config_user, config_password, config_host, config_database):
-    """Instancia una conexión y retorna el cusor"""
+    """Instancia una conexión y retorna los cursores normal y el asociativo"""
+    # Conexion
     conn = psycopg2.connect(user=config_user, password=config_password, host=config_host, database=config_database)
+
+    # Cursor normal: los fetchall traen listas de tuplas
     curr = conn.cursor()
     curr.execute("set search_path = 'negocio';")
-    return curr, conn
+
+    # Cursor asociativo: los fetchall traen listas de diccionarios con key=columna (es mas lento)
+    curr_asoc = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    curr_asoc.execute("set search_path = 'negocio';")
+
+    return curr, curr_asoc, conn
 
 
 # Singleton - Copiado y pegado, no preguntes
@@ -26,35 +34,29 @@ class GuaraniDB(metaclass=Singleton):
     """DAO para acceder a la base de datos"""
 
     __cursor = None
+    __cursor_asoc = None
 
-    # TODO: eliminar verificacion
-    def __init__(self, server_info: dict):
-        self.__cursor, self.__conn = instance_cursor(config_user=server_info.get('username'),
-                                                     config_password=server_info.get('password'),
-                                                     config_host=server_info.get('host'),
-                                                     config_database=server_info.get('dbname'))
+    def __init__(self, server_info: dict, usar_logs=False):
+
+        self.__cursor, self.__cursor_asoc, self.__conn = instance_cursor(config_user=server_info.get('username'),
+                                                                         config_password=server_info.get('password'),
+                                                                         config_host=server_info.get('host'),
+                                                                         config_database=server_info.get('dbname'))
 
     def get_cursor(self):
         return self.__cursor
 
-    def consultar(self, sql: str, asoc=True):
-        """Consulta en la base haciendo un fetchall
-        Parameters:
-            sql (str):      query sql para consultar
-            asoc (bool):    indica si retorna la consulta como un diccionario
-        """
-        self.get_cursor().execute(sql)
-        fetch = self.get_cursor().fetchall()
-        resultado = [self.tuple_to_dict(row) for row in fetch] if asoc else fetch
-        return resultado
+    def get_cursor_asociativo(self):
+        return self.__cursor_asoc
 
     def ejecutar(self, sql):
-        """Ejecuta una query y no hace ningún fetch"""
+        """
+        Ejecuta una query, no hace ningún fetch. Para que se vea reflejado en la db se debe hacer un commit.
+        """
 
         print(f'Ejecutando sql: {sql}')
         curr = self.get_cursor()
         try:
-            # a = 1
             curr.execute(sql)
             # self.__conn.commit()
         except psycopg2.DatabaseError as ejecutar_error:
@@ -68,7 +70,23 @@ class GuaraniDB(metaclass=Singleton):
             self.__conn.commit()
         except psycopg2.DatabaseError as commit_error:
             print(commit_error)
+            print('HACIENDO ROLLBACK')
             self.__conn.rollback()
+
+    def consultar(self, sql: str, asoc=True):
+        """
+        Consulta en la base haciendo un fetchall.
+        Parameters:
+            sql (str):      query sql para consultar
+            asoc (bool):    indica si retorna la consulta como una lista de diccionarios(asociativo) o tuplas
+        """
+        if asoc:
+            cursor = self.get_cursor_asociativo()
+        else:
+            cursor = self.get_cursor()
+
+        cursor.execute(sql)
+        return cursor.fetchall()
 
     def consultar_fila(self, sql, asoc=True):
         """Consulta en la base y retorna el primer registro
@@ -76,16 +94,16 @@ class GuaraniDB(metaclass=Singleton):
             sql (str):      query sql para consultar
             asoc (bool):    indica si retorna la consulta como un diccionario
         """
-        print(f'consulta sql: {sql}')
-        self.get_cursor().execute(sql)
-        fetch = self.get_cursor().fetchone()
-        resultado = [self.tuple_to_dict(row) for row in fetch] if asoc else fetch
-        return resultado
+        if asoc:
+            cursor = self.get_cursor_asociativo()
+        else:
+            cursor = self.get_cursor()
 
-    def tuple_to_dict(self, row):
-        """Transforma una row de una consulta en un diccionario usando los headers"""
-        columns = [x.name for x in self.get_cursor().description]
-        return {columns[index]: value for index, value in enumerate(row)}
+        cursor.execute(sql)
+        datos = cursor.fetchone()
+
+        # Contemplo si estoy devolviendo una sola columna
+        return datos[0] if datos.__len__() == 1 else datos
 
     def terminar_conexion(self):
         self.__cursor.close()

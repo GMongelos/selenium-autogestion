@@ -1,47 +1,40 @@
 """Lógica del programa o qcyo"""
 import sys
 
-import src.wrapper as wrapper
-
-from selenium import webdriver
-
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-
+from src import procedures
 from src.pg import GuaraniDB
 from src.config import Config
 from src.vista import consola
-
-from src.procedures import Procedure
 import inspect
 
 
 class Program:
 
-    def __init__(self, service_obj, conf_obj: Config):
-        """Instancia la conexion a la base de datos y el objeto webdriver"""
-
-        self.db = GuaraniDB(conf_obj.get_server_info())
+    def __init__(self, conf_obj: Config):
+        """
+        Instancia la conexion a la base de datos,
+        luego guardo la instancia de configuraicon y leo los procedures
+        """
         self.config_data = conf_obj
-        self.ag_driver = webdriver.Chrome(service=service_obj)
+        self.db = GuaraniDB(conf_obj.get_server_info())
         self.menu = dict()
 
-        # Leo la lista de funciones de Procedures y luego las guardo en un dict.
-        self.listaFunciones = inspect.getmembers(Procedure, predicate=inspect.isfunction)
-
-        for i in range(0, len(self.listaFunciones)):
-            self.menu[f"{i + 1}"] = f"{self.listaFunciones[i][0]}"
-
     def run(self):
-        """Abre el navegador con la url especificada en config, loguea con credenciales y espera input de usuario"""
-        #TODO Que queres hacer? Probar algo con tu usuario? o hacer algo con otro usuario?
+        """Renderiza el menu en pantalla y espera input de usuario. Luego ejecuta el procedimiento seleccionado"""
 
+        opcion = consola.renderizar_menu(procedures.procs)
+        if opcion != '0':
+            # Instancio el procedure y lo corro
+            p = procedures.procs.get(opcion)[1](self.config_data, self.db)
+            p.prepare_proc()
+
+            self.salir_aplicacion("Proceso terminado con exito, revise los logs para mas informacion")
+        else:
+            self.salir_aplicacion("Saliendo del programa..")
 
     def salir_aplicacion(self, msg=''):
         if msg:
             print(msg)
 
         self.db.terminar_conexion()
-        self.ag_driver.close()
-        self.ag_driver.quit()
         sys.exit()

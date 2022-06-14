@@ -29,12 +29,6 @@ def wait_for(driver: webdriver, element_id):
     return WebDriverWait(driver, 10).until(expected_conditions.presence_of_element_located((By.ID, str(element_id))))
 
 
-def login(self, usr, pswd='123'):
-    self.ag_driver.find_element(By.ID, 'usuario').send_keys(usr)
-    self.ag_driver.find_element(By.ID, 'password').send_keys(pswd)
-    self.ag_driver.find_element(By.ID, 'login').click()
-
-
 class WebElementWrapper:
     def __init__(self):
         pass
@@ -43,3 +37,5 @@ class WebElementWrapper:
         """Clickea en un elemento dado su id"""
 
         pass
+
+

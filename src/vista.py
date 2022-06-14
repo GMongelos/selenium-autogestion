@@ -16,24 +16,22 @@ class Vista:
         print('-' * 50)
         print()
 
-    def renderizar_menu(self, listaFunciones):
+    def renderizar_menu(self, procedures: dict):
         """
         Renderiza el menu en pantalla y espera un input de usuario que define lo que va a hacer
         """
         print(f'0 : Salir del programa')
-        for key in range(0, len(listaFunciones)):
-            print(f'{key+1} : {listaFunciones[key][0]}')
-
+        for item in procedures.items():
+            print(f'{item[0]} : {item[1][0]}')
 
         self.separador()
 
         opcion = input("Elija una opcion: ")
-        if not opcion.isdigit() or int(opcion) not in range(0, len(listaFunciones) + 1):
+        if not opcion.isdigit() or int(opcion) not in range(0, len(procedures) + 1):
             print("Opcion incorrecta, intente de nuevo")
             self.separador()
-            self.renderizar_menu(listaFunciones)
+            self.renderizar_menu(procedures)
         else:
-            print()
             return opcion
 
 
