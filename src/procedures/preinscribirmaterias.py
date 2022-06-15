@@ -98,15 +98,35 @@ class preInscribirMaterias(Procedure):
             # Comienza la salsa
 
             # Primero leemos las materias disponibles
+            # TODO: Si no hardcodeo los sleeps a veces funciona y a veces no, incluso con los EC, ver que está pasando
             materias = WebDriverWait(ag_driver, 10).until(
                 EC.presence_of_all_elements_located((By.CLASS_NAME, 'js-filter-content'))
             )
-            materias[0].click()
+            random.shuffle(materias)
 
-            WebDriverWait(ag_driver, 10).until(
-                EC.presence_of_element_located((By.ID, 'comision'))
-            )
-            comisiones_select = Select(ag_driver.find_element(By.ID, 'comision'))
-            comisiones_select.select_by_index(2)
+            # Alternativas 1, 2 y 3
+            for i in range(3):
+                for materia in materias:
+                    materia.click()
+                    time.sleep(1)
 
-            ag_driver.find_element(By.ID, 'btn-inscribir').click()
+                    # Lista de horarios de comision
+                    WebDriverWait(ag_driver, 10).until(
+                        EC.presence_of_element_located((By.ID, 'comision'))
+                    ).click()
+                    comisiones_select = Select(ag_driver.find_element(By.ID, 'comision'))
+
+                    # Selecciono un horario aleatorio entre los que haya
+                    indice = random.randrange(1, len(comisiones_select.options))
+                    comisiones_select.select_by_index(indice)
+
+                    aux = comisiones_select.first_selected_option
+                    time.sleep(1)
+
+                    # Guardo preinscripcion
+                    WebDriverWait(ag_driver, 10).until(
+                        EC.presence_of_element_located((By.ID, 'btn-inscribir'))
+                    )
+                    ag_driver.find_element(By.ID, 'btn-inscribir').click()
+                    time.sleep(1)
+                logger.loguear_info(f'Finalizada preinscripción de la alternativa {i+1}')
