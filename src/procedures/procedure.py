@@ -11,6 +11,7 @@ La base de un procedure debería ser la siguiente:
 """
 
 import abc
+import time
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -63,12 +64,6 @@ class Procedure:
         """
         pass
 
-    @abc.abstractmethod
-    def ejecutar_procedimiento(self, *args, **kwargs):
-        """Ejecuta el procedimiento en base a los parametros ingresados por el usuario,
-        toda la lógica va en este método"""
-        pass
-
     @staticmethod
     def abort(msg: str = None):
         """Termina el procedimiento, usar si se encuentra un error"""
@@ -76,38 +71,33 @@ class Procedure:
             msg = "PROCEDIMIENTO ABORTADO, REVISE EL LOG PARA MAS INFORMACION"
         raise SystemExit(msg)
 
-    def login(self, driver: webdriver, usr, pswd):
-        """Loguea a con las credenciales otorgadas"""
+    @abc.abstractmethod
+    def ejecutar_procedimiento(self, *args, **kwargs):
+        """Ejecuta el procedimiento en base a los parametros ingresados por el usuario,
+        toda la lógica va en este método"""
+        pass
 
-        driver.get(self.config_data.get_url())
-
-        prompt_usuario = driver.find_element(By.NAME, 'ef_form_5000221_datosusuario')
-        prompt_usuario.send_keys(usr)
-
-        prompt_pass = driver.find_element(By.NAME, 'ef_form_5000221_datosclave')
-        prompt_pass.send_keys(pswd)
-
-        button_login = driver.find_element(By.NAME, 'form_5000221_datos_ingresar')
-        button_login.send_keys(Keys.ENTER)
-
-        wrapper.focus_window(driver)
-
-    def inicializar(self, logger: Logger, driver: webdriver):
+    def inicializar(self, logger: Logger, driver: webdriver, username):
         """Loguea con credenciales y deja la operación seleccionada"""
 
-        logger.loguear_info(f'Ingresando a con usuario {self.config_data.get_username()}')
+        logger.loguear_info(f'Ingresando con usuario {username}')
 
-        # Loguea con credenciales
-        self.login(driver, self.config_data.get_username(), self.config_data.get_password())
+        # Loguea con usuario, como el login está mockeado la contraseña puede ser cualquier string
+        self.login(driver, username, "asd")
 
         logger.loguear_info('Login finalizado')
+
         logger.loguear_info(f'COMENZANDO PROCEDIMIENTO {self.TITULO_CONSOLA}')
 
-        # Entrar al menu
-        access_menu = driver.find_element(By.ID, 'menu_img')
-        access_menu.click()
-
-        # Ingresa nombre de operacion y la clickea
-        op_prompt = driver.find_element(By.ID, 'buscar_text')
-        op_prompt.send_keys(self.NOMBRE_OPERACION)
+        # Clickea en la operacion
         driver.find_element(By.ID, self.ID_HTML).click()
+
+    def login(self, driver: webdriver, usr, pswd):
+        """Loguea sin credenciales porque en tst debería estar el login mockeado"""
+
+        # Input de usuario y contraseña
+        driver.find_element(By.ID, 'usuario').send_keys(usr)
+        driver.find_element(By.ID, 'password').send_keys(pswd)
+
+        # Click al boton de login, uso xpath completo porque de otra forma no lo clickea
+        driver.find_element(By.XPATH, '/html/body/div[6]/div/div[1]/div/form/div[3]/div/input').click()
