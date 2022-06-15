@@ -9,7 +9,7 @@ from selenium.webdriver.support import expected_conditions
 
 
 def focus_window(driver: webdriver):
-    """Hace cosas con las ventanas"""
+    """Hace cosas con las ventanas, sirve solo para """
 
     window_before = driver.window_handles[0]
     window_after = driver.window_handles[1]
@@ -29,6 +29,7 @@ def wait_for(driver: webdriver, element_id):
     return WebDriverWait(driver, 10).until(expected_conditions.presence_of_element_located((By.ID, str(element_id))))
 
 
+# TODO: Decidir qué hacer con esto
 class WebElementWrapper:
     def __init__(self):
         pass

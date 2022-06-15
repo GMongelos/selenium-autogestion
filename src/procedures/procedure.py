@@ -77,27 +77,24 @@ class Procedure:
         toda la lógica va en este método"""
         pass
 
-    def inicializar(self, logger: Logger, driver: webdriver, username):
-        """Loguea con credenciales y deja la operación seleccionada"""
-
-        logger.loguear_info(f'Ingresando con usuario {username}')
-
-        # Loguea con usuario, como el login está mockeado la contraseña puede ser cualquier string
-        self.login(driver, username, "asd")
-
-        logger.loguear_info('Login finalizado')
-
-        logger.loguear_info(f'COMENZANDO PROCEDIMIENTO {self.TITULO_CONSOLA}')
-
-        # Clickea en la operacion
-        driver.find_element(By.ID, self.ID_HTML).click()
-
     def login(self, driver: webdriver, usr, pswd):
         """Loguea sin credenciales porque en tst debería estar el login mockeado"""
 
         # Input de usuario y contraseña
+        wrapper.wait_for(driver, 'usuario')
         driver.find_element(By.ID, 'usuario').send_keys(usr)
         driver.find_element(By.ID, 'password').send_keys(pswd)
 
         # Click al boton de login, uso xpath completo porque de otra forma no lo clickea
         driver.find_element(By.XPATH, '/html/body/div[6]/div/div[1]/div/form/div[3]/div/input').click()
+
+    def inicializar(self, logger: Logger, driver: webdriver, username):
+        """Loguea con credenciales y deja la operación seleccionada"""
+
+        logger.loguear_info(f'Ingresando con usuario {username}')
+        self.login(driver, username, "x")  # Puse "x" porque se puede ingresar cualquier contraseña
+        logger.loguear_info('Login finalizado')
+
+        # Clickea en la operacion
+        wrapper.wait_for(driver, self.ID_HTML)
+        driver.find_element(By.ID, self.ID_HTML).click()

@@ -7,6 +7,9 @@ import selenium.common.exceptions
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import Select
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 from src.procedures.procedure import Procedure
 from src.logger import Logger
@@ -76,19 +79,34 @@ class preInscribirMaterias(Procedure):
         return datos
 
     def prepare_proc(self):
-        # TODO: Aca se dividirían los datos si implementa threading, por ahora lo dejo plano
+        # TODO: Aca se dividirían los datos cuando se implemente threading, lo dejo así por el momento
         self.ejecutar_procedimiento(self.parametros.get('tipo'), self.datos)
 
     def ejecutar_procedimiento(self, tipo, datos):
         logger = Logger(log_filename=__name__)
 
-        gestion_driver = webdriver.Chrome(service=self.service_obj)
-        gestion_driver.get(self.config_data.get_url())
+        ag_driver = webdriver.Chrome(service=self.service_obj)
+        ag_driver.get(self.config_data.get_url())
+
+        logger.loguear_info(f'COMENZANDO PROCEDIMIENTO {self.TITULO_CONSOLA}')
 
         # Por cada usuario, hacer el procedimiento
         for alumno in datos:
             # Loguea con credenciales, y deja la operacion abierta
-            self.inicializar(logger, gestion_driver, alumno.get('usuario'))
+            self.inicializar(logger, ag_driver, alumno.get('usuario'))
 
-            # Logica va aca
-            time.sleep(3)
+            # Comienza la salsa
+
+            # Primero leemos las materias disponibles
+            materias = WebDriverWait(ag_driver, 10).until(
+                EC.presence_of_all_elements_located((By.CLASS_NAME, 'js-filter-content'))
+            )
+            materias[0].click()
+
+            WebDriverWait(ag_driver, 10).until(
+                EC.presence_of_element_located((By.ID, 'comision'))
+            )
+            comisiones_select = Select(ag_driver.find_element(By.ID, 'comision'))
+            comisiones_select.select_by_index(2)
+
+            ag_driver.find_element(By.ID, 'btn-inscribir').click()
