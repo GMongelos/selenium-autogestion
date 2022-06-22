@@ -32,9 +32,7 @@ class preInscribirMaterias(Procedure):
         # params['propuesta'] = input("Elija la propuesta de los alumnos a inscribir: ").upper()
         params['propuesta'] = 9
 
-        # TODO: Deshadcodear, por ahora pruebo con dos
-        # params['cantidad'] = int(input("Cantidad de alumnos a inscribir: "))
-        params['cantidad'] = 2
+        params['cantidad'] = int(input("Cantidad de alumnos a inscribir: "))
 
         """
         Criterios, define el algoritmo de preinscripcion:
@@ -72,7 +70,8 @@ class preInscribirMaterias(Procedure):
                         ON sga_alumnos.propuesta = sga_propuestas.propuesta
                     WHERE sga_propuestas.propuesta = {propuesta}
                     AND mdp_personas.usuario IS NOT NULL
-                    AND mdp_personas.usuario = 'mpafundi'
+                    AND mdp_personas.usuario = 'cjimenezferrer'
+                    ORDER BY random()
                     LIMIT {cant};"""
 
         datos = self.db_instance.consultar(sql)
@@ -99,34 +98,52 @@ class preInscribirMaterias(Procedure):
 
             # Primero leemos las materias disponibles
             # TODO: Si no hardcodeo los sleeps a veces funciona y a veces no, incluso con los EC, ver que está pasando
-            materias = WebDriverWait(ag_driver, 10).until(
-                EC.presence_of_all_elements_located((By.CLASS_NAME, 'js-filter-content'))
-            )
+            try:
+                materias = WebDriverWait(ag_driver, 2).until(
+                    EC.presence_of_all_elements_located((By.CLASS_NAME, 'js-filter-content'))
+                )
+            except selenium.common.exceptions.TimeoutException:
+                usuario = alumno.get('usuario')
+                logger.loguear_warning(f'No hay materias para {usuario}, continuando con el siguiente')
+                next(datos)
+
             random.shuffle(materias)
+            time.sleep(1)
 
-            # Alternativas 1, 2 y 3
-            for i in range(3):
-                for materia in materias:
-                    materia.click()
-                    time.sleep(1)
+            # Tipo 1: totalmente aleatorio
+            if self.parametros.get('tipo') == 1:
+                # Alternativas 1, 2 y 3
+                for i in range(3):
+                    logger.log_compuesto_iniciar(f'PREINSCRIPCION A ALTERNATIVA {i}')
+                    for materia in materias:
+                        materia.click()
+                        time.sleep(1)
 
-                    # Lista de horarios de comision
-                    WebDriverWait(ag_driver, 10).until(
-                        EC.presence_of_element_located((By.ID, 'comision'))
-                    ).click()
-                    comisiones_select = Select(ag_driver.find_element(By.ID, 'comision'))
+                        # Lista de horarios de comision
+                        WebDriverWait(ag_driver, 10).until(
+                            EC.presence_of_element_located((By.ID, 'comision'))
+                        ).click()
+                        comisiones_select = ag_driver.find_elements(By.CSS_SELECTOR, '#comision > option:not([enabled])')
 
-                    # Selecciono un horario aleatorio entre los que haya
-                    indice = random.randrange(1, len(comisiones_select.options))
-                    comisiones_select.select_by_index(indice)
+                        # Selecciono un horario aleatorio entre los que haya
+                        indice = random.randrange(1, len(comisiones_select))
+                        comisiones_select[indice].click()
 
-                    aux = comisiones_select.first_selected_option
-                    time.sleep(1)
+                        # Existe la posibilidad de que no se pueda inscribir a una materia porque el unico horario
+                        # que tiene disponible está ocupado por otra
+                        # TODO: Contemplar esto, por ahora doy aviso mediante el logger y listo
+                        if comisiones_select[indice].text == 'Seleccionar una comision':
+                            logger.log_compuesto_add(f'No se pudo preinscribir a la materia {materia.text[2:]}')
+                            next(materias)
+                        time.sleep(1)
 
-                    # Guardo preinscripcion
-                    WebDriverWait(ag_driver, 10).until(
-                        EC.presence_of_element_located((By.ID, 'btn-inscribir'))
-                    )
-                    ag_driver.find_element(By.ID, 'btn-inscribir').click()
-                    time.sleep(1)
-                logger.loguear_info(f'Finalizada preinscripción de la alternativa {i+1}')
+                        # Guardo preinscripcion
+                        WebDriverWait(ag_driver, 10).until(
+                            EC.presence_of_element_located((By.ID, 'btn-inscribir'))
+                        )
+                        ag_driver.find_element(By.ID, 'btn-inscribir').click()
+
+                        logger.log_compuesto_add(f'Preinscripto a [{materia.text[2:]}] en el horario [{comisiones_select[indice].text}]')
+                        time.sleep(1)
+
+                    logger.log_compuesto_commit(f'Finalizada preinscripción de la alternativa {i+1}')
