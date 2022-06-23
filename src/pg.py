@@ -6,8 +6,15 @@ import psycopg2.extras
 
 def instance_cursor(config_user, config_password, config_host, config_database):
     """Instancia una conexión y retorna los cursores normal y el asociativo"""
-    # Conexion
-    conn = psycopg2.connect(user=config_user, password=config_password, host=config_host, database=config_database)
+    try:
+        print("Conectando a la base de datos...")
+        conn = psycopg2.connect(user=config_user, password=config_password, host=config_host, database=config_database)
+    except psycopg2.DatabaseError:
+        msg = "Error al conectar con la base de datos, " \
+              "verifique su conexion a internet, el archivo de configuracion o si tiene la VPN activada"
+        raise SystemExit(msg)
+    else:
+        print("Conexion exitosa\n")
 
     # Cursor normal: los fetchall traen listas de tuplas
     curr = conn.cursor()
