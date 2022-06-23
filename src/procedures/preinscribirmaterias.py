@@ -1,12 +1,30 @@
-"""Procedimiento para inscribir un alumno a materias WIP"""
+"""
+Procedimiento para inscribir un alumno a materias. Dada una propuesta y una cantidad finita de alumnos, se logea en
+autogestion con cada usuario e intenta preinscribirse a materias dado un criterio. Los criterios que definen al
+algoritmo de preinscripción son los siguientes:
+    1 - Aleatorio completo: No hay patron de preinscripción. Intenta inscribirse a las 3 alternativas en todas las
+        materias posibles que aparezcan en el listado del alumno.
+    2 - Aleatorio: No hay patron, se puede saltear inscribirse a materias y hasta puede no inscribirse a las 3
+        alternativas
+    3 - Igualitario: Las 3 alternativas son iguales.
+    5 - Primera: Preinscribe solamente en la primer alternativa.
+
+Parametros de ejecucion:
+    - Propuesta: Para facilitar y encapsular los grupos de alumnos que va a preinscribir, se le pide la propuesta al
+        usuario así busca alumnos de esa propuesta.
+    - Cantidad: Cantidad de alumnos a inscribir, se explica solo.
+    - Tipo: El criterio del algoritmo de preinscripcion(explicado anteriormente)
+    - Threads: Cantidad de threads a utilizar si se decide utilizar threading.
+"""
 
 import random
 import time
 
-import selenium.common.exceptions
+import selenium.common.exceptions as selenium_exceptions
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -22,10 +40,7 @@ class preInscribirMaterias(Procedure):
     ID_HTML = 'cursada'
 
     def obtener_parametros(self):
-        """
-        Parámetros que definen el algoritmo dela presincripcion masiva
-
-        """
+        """ Parámetros que definen el algoritmo de la presincripcion """
         params = dict()
 
         # TODO: Obtener las propuestas de grado y mostrarlas en pantalla, por el momento hardcodeo sistemas
@@ -34,14 +49,6 @@ class preInscribirMaterias(Procedure):
 
         params['cantidad'] = int(input("Cantidad de alumnos a inscribir: "))
 
-        """
-        Criterios, define el algoritmo de preinscripcion:
-            1 - Aleatorio: No hay patron, se puede inscribir a todo y todas sus alternativas como no.
-            2 - Completo: Preinscribe al alumno en las 3 alternativas, siendo estas 3 distintas(si es posible)
-            3 - Igualitario: Las 3 alternativas son iguales para todos
-            4 - Igualitario aleatorio: Las 3 alternativas puedens ser iguales, o 2 o 1 :)
-            5 - Solo primera: Inscribe a todos solamente en la primer alternativa.
-        """
         # TODO: Por ahora hardcodeo el tipo 1, mostrar en pantalla los demas.
         # params['tipo'] = input("Ingrese el critero para la inscripcion: ")
         params['tipo'] = 1
@@ -55,14 +62,15 @@ class preInscribirMaterias(Procedure):
     def generar_datos(self):
         """Obtiene los usuarios para preinscribir según los parámetros otorgados"""
 
-        # todo: dESHARDCODEAR PAFUNDI
         propuesta = self.parametros.get('propuesta')
         cant = self.parametros.get('cantidad')
         sql = f"""  SELECT  mdp_personas.apellido,
                             mdp_personas.nombres,
                             mdp_personas.usuario,
+                            mdp_personas.persona,
+                            sga_alumnos.alumno,
                             sga_propuestas.codigo,
-                            sga_propuestas.nombre
+                            sga_propuestas.nombre AS nombre_propuesta
                     FROM mdp_personas
                     JOIN sga_alumnos
                         ON mdp_personas.persona = sga_alumnos.persona
@@ -70,7 +78,6 @@ class preInscribirMaterias(Procedure):
                         ON sga_alumnos.propuesta = sga_propuestas.propuesta
                     WHERE sga_propuestas.propuesta = {propuesta}
                     AND mdp_personas.usuario IS NOT NULL
-                    AND mdp_personas.usuario = 'cjimenezferrer'
                     ORDER BY random()
                     LIMIT {cant};"""
 
@@ -96,54 +103,80 @@ class preInscribirMaterias(Procedure):
 
             # Comienza la salsa
 
+            # Contemplo el caso de aquellas personas que tengan multiples propuestas
+            # Las chances de que alguien tenga dos carreras es pequeñita, usamos el principio AFNP
+            try:
+                ag_driver.find_element(By.ID, 'js-dropdown-toggle-carreras').click()
+
+                propuestas = ag_driver.find_elements(By.CLASS_NAME, 'js-select-carreras')
+                for propuesta in propuestas:
+                    if propuesta.text.lower() == alumno.get('nombre_propuesta').lower():
+                        propuesta.click()
+
+                # Tenemos que volver a clickear en la operacion, porque a veces te devuelve al inicio del alumno
+                ag_driver.find_element(By.ID, self.ID_HTML).click()
+            except selenium_exceptions.NoSuchElementException:
+                pass
+
+
             # Primero leemos las materias disponibles
             # TODO: Si no hardcodeo los sleeps a veces funciona y a veces no, incluso con los EC, ver que está pasando
             try:
                 materias = WebDriverWait(ag_driver, 2).until(
                     EC.presence_of_all_elements_located((By.CLASS_NAME, 'js-filter-content'))
                 )
-            except selenium.common.exceptions.TimeoutException:
+            except selenium_exceptions.TimeoutException:
                 usuario = alumno.get('usuario')
-                logger.loguear_warning(f'No hay materias para {usuario}, continuando con el siguiente')
-                next(datos)
+                propuesta = alumno.get('nombre_propuesta')
+                logger.loguear_warning(f'No hay materias para {usuario} en la propuesta {propuesta}, continuando con el siguiente')
+                if len(datos) > 1:
+                    next(datos)
+                else:
+                    break
 
-            random.shuffle(materias)
+            # random.shuffle(materias) TODO DESCOMENTAR
             time.sleep(1)
 
+            # TODO: Hacer esto de forma poliamorfica
             # Tipo 1: totalmente aleatorio
             if self.parametros.get('tipo') == 1:
                 # Alternativas 1, 2 y 3
                 for i in range(3):
-                    logger.log_compuesto_iniciar(f'PREINSCRIPCION A ALTERNATIVA {i}')
+                    logger.log_compuesto_iniciar(f'PREINSCRIPCION ALTERNATIVA {i+1}')
                     for materia in materias:
                         materia.click()
                         time.sleep(1)
 
                         # Lista de horarios de comision
-                        WebDriverWait(ag_driver, 10).until(
+                        WebDriverWait(ag_driver, 3).until(
                             EC.presence_of_element_located((By.ID, 'comision'))
                         ).click()
-                        comisiones_select = ag_driver.find_elements(By.CSS_SELECTOR, '#comision > option:not([enabled])')
+                        comisiones = ag_driver.find_elements(By.CSS_SELECTOR, '#comision > option:not([enabled])')
 
-                        # Selecciono un horario aleatorio entre los que haya
-                        indice = random.randrange(1, len(comisiones_select))
-                        comisiones_select[indice].click()
+                        # Filtro las comisiones a las que no me puedo inscribir por solapamiento de horario
+                        comisiones = [comision for comision in comisiones if comision.is_enabled()]
 
                         # Existe la posibilidad de que no se pueda inscribir a una materia porque el unico horario
                         # que tiene disponible está ocupado por otra
-                        # TODO: Contemplar esto, por ahora doy aviso mediante el logger y listo
-                        if comisiones_select[indice].text == 'Seleccionar una comision':
+                        if not comisiones:
                             logger.log_compuesto_add(f'No se pudo preinscribir a la materia {materia.text[2:]}')
-                            next(materias)
+                            if len(comisiones) > 1:
+                                next(comisiones)
+                            else:
+                                break
                         time.sleep(1)
 
+                        # Selecciono un horario aleatorio entre los que haya
+                        eleccion = random.choice(comisiones)
+                        eleccion.click()
+
                         # Guardo preinscripcion
-                        WebDriverWait(ag_driver, 10).until(
+                        WebDriverWait(ag_driver, 3).until(
                             EC.presence_of_element_located((By.ID, 'btn-inscribir'))
                         )
                         ag_driver.find_element(By.ID, 'btn-inscribir').click()
 
-                        logger.log_compuesto_add(f'Preinscripto a [{materia.text[2:]}] en el horario [{comisiones_select[indice].text}]')
+                        logger.log_compuesto_add(f'[{materia.text[2:]}] horario [{eleccion.text}]')
                         time.sleep(1)
 
                     logger.log_compuesto_commit(f'Finalizada preinscripción de la alternativa {i+1}')
