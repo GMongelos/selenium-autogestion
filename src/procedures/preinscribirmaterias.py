@@ -38,6 +38,7 @@ class preInscribirMaterias(Procedure):
     NOMBRE_OPERACION = 'Preinscribir alumnos a materias e.e'
     TITULO_CONSOLA = 'Preinscribir alumnos a materias masivamente'
     ID_HTML = 'cursada'
+    XPATH_OPERACION = '/html/body/div[2]/div/div/div/ul[1]/li[1]'
 
     def obtener_parametros(self):
         """ Parámetros que definen el algoritmo de la presincripcion """
@@ -78,6 +79,7 @@ class preInscribirMaterias(Procedure):
                         ON sga_alumnos.propuesta = sga_propuestas.propuesta
                     WHERE sga_propuestas.propuesta = {propuesta}
                     AND mdp_personas.usuario IS NOT NULL
+                    AND mdp_personas.usuario = '42150836'
                     ORDER BY random()
                     LIMIT {cant};"""
 
@@ -94,30 +96,29 @@ class preInscribirMaterias(Procedure):
         ag_driver = webdriver.Chrome(service=self.service_obj)
         ag_driver.get(self.config_data.get_url())
 
-        logger.loguear_info(f'COMENZANDO PROCEDIMIENTO {self.TITULO_CONSOLA}')
+        logger.loguear_info(f'INICIANDO PROCEDIMIENTO {self.TITULO_CONSOLA}')
 
         # Por cada usuario, hacer el procedimiento
         for alumno in datos:
             # Loguea con credenciales, y deja la operacion abierta
-            self.inicializar(logger, ag_driver, alumno.get('usuario'))
+            usuario = alumno.get('usuario')
+            self.inicializar(logger, ag_driver, usuario)
 
             # Comienza la salsa
 
             # Contemplo el caso de aquellas personas que tengan multiples propuestas
-            # Las chances de que alguien tenga dos carreras es pequeñita, usamos el principio AFNP
+            # AFNP, porque si
             try:
                 ag_driver.find_element(By.ID, 'js-dropdown-toggle-carreras').click()
 
-                propuestas = ag_driver.find_elements(By.CLASS_NAME, 'js-select-carreras')
+                propuestas = ag_driver.find_elements(By.CLASS_NAME, 'js-select-carreras').find_elements_by_tag_name('li')
                 for propuesta in propuestas:
                     if propuesta.text.lower() == alumno.get('nombre_propuesta').lower():
                         propuesta.click()
-
-                # Tenemos que volver a clickear en la operacion, porque a veces te devuelve al inicio del alumno
-                ag_driver.find_element(By.ID, self.ID_HTML).click()
             except selenium_exceptions.NoSuchElementException:
-                pass
-
+                ag_driver.find_element(By.XPATH, self.XPATH_OPERACION).click()
+            finally:
+                ag_driver.find_element(By.XPATH, self.XPATH_OPERACION).click()
 
             # Primero leemos las materias disponibles
             # TODO: Si no hardcodeo los sleeps a veces funciona y a veces no, incluso con los EC, ver que está pasando
@@ -126,15 +127,13 @@ class preInscribirMaterias(Procedure):
                     EC.presence_of_all_elements_located((By.CLASS_NAME, 'js-filter-content'))
                 )
             except selenium_exceptions.TimeoutException:
-                usuario = alumno.get('usuario')
                 propuesta = alumno.get('nombre_propuesta')
                 logger.loguear_warning(f'No hay materias para {usuario} en la propuesta {propuesta}, continuando con el siguiente')
-                if len(datos) > 1:
-                    next(datos)
-                else:
-                    break
 
-            # random.shuffle(materias) TODO DESCOMENTAR
+                self.logout(ag_driver)
+                continue
+
+            random.shuffle(materias)
             time.sleep(1)
 
             # TODO: Hacer esto de forma poliamorfica
@@ -160,10 +159,7 @@ class preInscribirMaterias(Procedure):
                         # que tiene disponible está ocupado por otra
                         if not comisiones:
                             logger.log_compuesto_add(f'No se pudo preinscribir a la materia {materia.text[2:]}')
-                            if len(comisiones) > 1:
-                                next(comisiones)
-                            else:
-                                break
+                            continue
                         time.sleep(1)
 
                         # Selecciono un horario aleatorio entre los que haya
@@ -177,6 +173,15 @@ class preInscribirMaterias(Procedure):
                         ag_driver.find_element(By.ID, 'btn-inscribir').click()
 
                         logger.log_compuesto_add(f'[{materia.text[2:]}] horario [{eleccion.text}]')
-                        time.sleep(1)
+                        # time.sleep(1)
 
                     logger.log_compuesto_commit(f'Finalizada preinscripción de la alternativa {i+1}')
+
+            logger.loguear_info(f"Finalizada preinscripción de {usuario}")
+            self.logout(ag_driver)
+
+        logger.log_compuesto_iniciar(f"PROCEDIMIENTO FINALIZADO")
+        logger.log_compuesto_add(f"Alumnos procesados: {len(datos)}")
+        logger.log_compuesto_add(f"Cantidad de preinscripciones exitosas: ")
+        logger.log_compuesto_add(f"Cantidad de preinscripciones no realizadas: ")
+        logger.log_compuesto_commit()

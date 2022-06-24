@@ -26,7 +26,7 @@ def focus_window(driver: webdriver):
 def wait_for(driver: webdriver, element_id):
     """Espera a que un elemento en particular esté en pantalla"""
 
-    return WebDriverWait(driver, 10).until(expected_conditions.presence_of_element_located((By.ID, str(element_id))))
+    return WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.ID, str(element_id))))
 
 
 # TODO: Decidir qué hacer con esto

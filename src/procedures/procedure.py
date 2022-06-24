@@ -88,6 +88,12 @@ class Procedure:
         # Click al boton de login, uso xpath completo porque de otra forma no lo clickea
         driver.find_element(By.XPATH, '/html/body/div[6]/div/div[1]/div/form/div[3]/div/input').click()
 
+    def logout(self, driver: webdriver):
+        driver.find_element(By.CLASS_NAME, 'dropdown').click()
+        time.sleep(0.5)
+        driver.find_element(By.CLASS_NAME, 'icon-off').click()
+        time.sleep(0.5)
+
     def inicializar(self, logger: Logger, driver: webdriver, username):
         """Loguea con credenciales y deja la operación seleccionada"""
 
@@ -97,4 +103,6 @@ class Procedure:
 
         # Clickea en la operacion
         wrapper.wait_for(driver, self.ID_HTML)
+        # qcyo ya estoy paranoico porque a veces no funciono
         driver.find_element(By.ID, self.ID_HTML).click()
+        driver.find_element(By.XPATH, self.XPATH_OPERACION).click()
