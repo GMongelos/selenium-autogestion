@@ -79,7 +79,6 @@ class preInscribirMaterias(Procedure):
                         ON sga_alumnos.propuesta = sga_propuestas.propuesta
                     WHERE sga_propuestas.propuesta = {propuesta}
                     AND mdp_personas.usuario IS NOT NULL
-                    AND mdp_personas.usuario = '42150836'
                     ORDER BY random()
                     LIMIT {cant};"""
 
@@ -111,7 +110,7 @@ class preInscribirMaterias(Procedure):
             try:
                 ag_driver.find_element(By.ID, 'js-dropdown-toggle-carreras').click()
 
-                propuestas = ag_driver.find_elements(By.CLASS_NAME, 'js-select-carreras').find_elements_by_tag_name('li')
+                propuestas = ag_driver.find_elements(By.CLASS_NAME, 'js-select-carreras')
                 for propuesta in propuestas:
                     if propuesta.text.lower() == alumno.get('nombre_propuesta').lower():
                         propuesta.click()
