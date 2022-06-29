@@ -19,6 +19,7 @@ Parametros de ejecucion:
 
 import random
 import time
+import concurrent.futures
 
 import selenium.common.exceptions as selenium_exceptions
 
@@ -54,9 +55,10 @@ class preInscribirMaterias(Procedure):
         # params['tipo'] = input("Ingrese el critero para la inscripcion: ")
         params['tipo'] = 1
 
-        # params['threading'] = input("Usar threading?(Y/N): ").upper()
-        # if params['threading'] == 'Y':
-        #     params['cant_threads'] = input("Cantidad de threads(se recomienda max 5): ")
+        resp = input("Threading por el momento esta WIP y puede no funcionar del todo bien,"
+                     "\nUsar threading?(Y/N): ").upper()
+        if resp == 'Y':
+            params['cant_threads'] = int(input("Cantidad de threads(se recomienda max 5): "))
 
         return params
 
@@ -77,8 +79,9 @@ class preInscribirMaterias(Procedure):
                         ON mdp_personas.persona = sga_alumnos.persona
                     JOIN sga_propuestas
                         ON sga_alumnos.propuesta = sga_propuestas.propuesta
-                    WHERE sga_propuestas.propuesta = {propuesta}
-                    AND mdp_personas.usuario IS NOT NULL
+                    WHERE /*sga_propuestas.propuesta = {propuesta}
+                    AND*/ mdp_personas.usuario IS NOT NULL
+                    AND NOT EXISTS(select * from sga_docentes where sga_docentes.persona = sga_alumnos.persona)
                     ORDER BY random()
                     LIMIT {cant};"""
 
@@ -86,11 +89,31 @@ class preInscribirMaterias(Procedure):
         return datos
 
     def prepare_proc(self):
-        # TODO: Aca se dividirían los datos cuando se implemente threading, lo dejo así por el momento
-        self.ejecutar_procedimiento(self.parametros.get('tipo'), self.datos)
 
-    def ejecutar_procedimiento(self, tipo, datos):
-        logger = Logger(log_filename=__name__)
+        # TODO: La division de datos aún no está bien para resto != 0, resolver de alguna forma no rara
+        cant_threads = self.parametros.get('cant_threads')
+        step = round(len(self.datos) / cant_threads)
+        resto = len(self.datos) % cant_threads
+
+        if cant_threads:
+            arguments = [self.datos[indice:indice+step] for indice in range(0, len(self.datos), step+resto)]
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=arguments.__len__(),
+                                                       thread_name_prefix='th') as executor:
+                for key, arg in enumerate(arguments, 1):
+                    executor.submit(self.ejecutar_procedimiento, self.parametros.get('tipo'), arg, key)
+        else:
+            self.ejecutar_procedimiento(self.parametros.get('tipo'), self.datos)
+
+    def ejecutar_procedimiento(self, tipo, datos, th_id=0):
+
+        if th_id == 0:
+            id_log = self.__module__
+            logger = Logger(id_log, id_log)
+        else:
+            print(f'Iniciando thread {th_id}')
+            id_log = f'th_{th_id}'
+            logger = Logger(id_log, id_log, es_thread=True)
 
         ag_driver = webdriver.Chrome(service=self.service_obj)
         ag_driver.get(self.config_data.get_url())
@@ -105,6 +128,13 @@ class preInscribirMaterias(Procedure):
 
             # Comienza la salsa
 
+            # Confirmamos los datos personales por las dudas
+            ag_driver.find_element(By.XPATH, '//*[@id="js-nav"]/li[4]').click()
+            ag_driver.find_element(By.ID, 'datos_censales').click()
+            time.sleep(1)
+            ag_driver.find_element(By.ID, 'btnConfirmar').click()
+            time.sleep(1)
+
             # Contemplo el caso de aquellas personas que tengan multiples propuestas
             # AFNP, porque si
             try:
@@ -112,15 +142,15 @@ class preInscribirMaterias(Procedure):
 
                 propuestas = ag_driver.find_elements(By.CLASS_NAME, 'js-select-carreras')
                 for propuesta in propuestas:
-                    if propuesta.text.lower() == alumno.get('nombre_propuesta').lower():
+                    if propuesta.text.upper() == alumno.get('nombre_propuesta').upper():
+                        # ag_driver.execute_script("arguments[0].click();", propuesta)
                         propuesta.click()
+                        break
             except selenium_exceptions.NoSuchElementException:
-                ag_driver.find_element(By.XPATH, self.XPATH_OPERACION).click()
-            finally:
-                ag_driver.find_element(By.XPATH, self.XPATH_OPERACION).click()
+                ag_driver.find_element(By.ID, self.ID_HTML).click()
+                time.sleep(1)
 
             # Primero leemos las materias disponibles
-            # TODO: Si no hardcodeo los sleeps a veces funciona y a veces no, incluso con los EC, ver que está pasando
             try:
                 materias = WebDriverWait(ag_driver, 2).until(
                     EC.presence_of_all_elements_located((By.CLASS_NAME, 'js-filter-content'))
@@ -147,7 +177,7 @@ class preInscribirMaterias(Procedure):
 
                         # Lista de horarios de comision
                         WebDriverWait(ag_driver, 3).until(
-                            EC.presence_of_element_located((By.ID, 'comision'))
+                            EC.element_to_be_clickable((By.ID, 'comision'))
                         ).click()
                         comisiones = ag_driver.find_elements(By.CSS_SELECTOR, '#comision > option:not([enabled])')
 
@@ -172,7 +202,7 @@ class preInscribirMaterias(Procedure):
                         ag_driver.find_element(By.ID, 'btn-inscribir').click()
 
                         logger.log_compuesto_add(f'[{materia.text[2:]}] horario [{eleccion.text}]')
-                        # time.sleep(1)
+                        time.sleep(1)
 
                     logger.log_compuesto_commit(f'Finalizada preinscripción de la alternativa {i+1}')
 

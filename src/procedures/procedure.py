@@ -98,11 +98,12 @@ class Procedure:
         """Loguea con credenciales y deja la operación seleccionada"""
 
         logger.loguear_info(f'Ingresando con usuario {username}')
-        self.login(driver, username, "x")  # Puse "x" porque se puede ingresar cualquier contraseña
+        # Se puede ingresar cualquier contraseña, "x" es cortito y fachero
+        self.login(driver, username, "x")
         logger.loguear_info('Login finalizado')
 
         # Clickea en la operacion
         wrapper.wait_for(driver, self.ID_HTML)
-        # qcyo ya estoy paranoico porque a veces no funciono
+        # qcyo ya estoy paranoico porque a veces no funciona
         driver.find_element(By.ID, self.ID_HTML).click()
-        driver.find_element(By.XPATH, self.XPATH_OPERACION).click()
+        time.sleep(0.5)
